@@ -42,7 +42,6 @@ jobs:
           ref: ${{ needs.resolve.outputs.tag }}
           path: zed
       - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
       - if: runner.os == 'Linux'
         run: |
           sudo apt-get update
@@ -57,6 +56,9 @@ jobs:
         run: |
           python3 scripts/standalone.py --zed zed --root "$ROOT" \
             --version "$VERSION" --local --out build
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: build/${{ env.ROOT }}-standalone
       - if: runner.os == 'Linux'
         run: cargo build --manifest-path "build/${ROOT}-standalone/Cargo.toml" --no-default-features --features wayland,x11
       - if: runner.os != 'Linux'
