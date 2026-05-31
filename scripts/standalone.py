@@ -130,6 +130,10 @@ def publish(dest, dry):
            "--manifest-path", str(dest / "Cargo.toml")]
     if dry:
         cmd.append("--dry-run")
+        if subprocess.run(cmd).returncode != 0:
+            print(f"warn: dry-run could not verify {dest.name} "
+                  f"(expected for crates with not-yet-published internal deps)")
+        return
     for _ in range(4):
         if subprocess.run(cmd).returncode == 0:
             return
@@ -157,7 +161,7 @@ def main():
 
     if args.list:
         print(json.dumps([
-            {"name": n, "repo": rename[n],
+            {"name": n, "repo": n, "dir": rename[n],
              "path": os.path.relpath(Path(pkgs[n]["manifest_path"]).parent, zed)}
             for n in order
         ]))

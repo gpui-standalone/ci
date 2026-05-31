@@ -82,7 +82,7 @@ jobs:
           gh repo view "$REPO" >/dev/null 2>&1 \
             || gh repo create "$REPO" --public \
                  --description "Standalone mirror of zed-industries/zed:${{ matrix.path }}"
-          cd "build/${{ matrix.repo }}"
+          cd "build/${{ matrix.dir }}"
           git init -q
           git checkout -qb main
           git -c user.email=ci@local -c user.name=ci add -A
