@@ -88,6 +88,7 @@ jobs:
           git config --global user.email ci@local
           git config --global user.name ci
           cd zed
+          git config --unset-all http.https://github.com/.extraheader || true
           git remote add mirror "$URL"
           git fetch -q mirror 'refs/heads/upstream:refs/remotes/mirror/upstream' || true
           git fetch -q mirror 'refs/heads/main:refs/remotes/mirror/main' || true
