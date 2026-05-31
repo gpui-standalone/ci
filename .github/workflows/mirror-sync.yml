@@ -35,7 +35,10 @@ jobs:
           ref: ${{ steps.pick.outputs.tag }}
           path: zed
       - uses: dtolnay/rust-toolchain@stable
-      - run: python3 -m pip install tomlkit
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - run: pip install tomlkit
       - id: r
         run: |
           TAG="${{ steps.pick.outputs.tag }}"
@@ -61,7 +64,10 @@ jobs:
           ref: ${{ env.TAG }}
           path: zed
       - uses: dtolnay/rust-toolchain@stable
-      - run: python3 -m pip install tomlkit
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - run: pip install tomlkit
 
       - name: Build crate tree
         run: |
