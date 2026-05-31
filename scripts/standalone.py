@@ -136,8 +136,13 @@ def publish(dest, dry, verify=False):
                   f"(expected for crates with not-yet-published internal deps)")
         return
     for _ in range(4):
-        if subprocess.run(cmd).returncode == 0:
+        r = subprocess.run(cmd, stderr=subprocess.PIPE, text=True)
+        if r.stderr:
+            print(r.stderr, end="")
+        if r.returncode == 0:
             return
+        if "429" in r.stderr or "too many" in r.stderr.lower():
+            raise SystemExit("rate limited")
         time.sleep(20)
     raise SystemExit(f"publish failed: {dest.name}")
 

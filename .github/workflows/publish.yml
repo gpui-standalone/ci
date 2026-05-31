@@ -92,5 +92,5 @@ jobs:
       - env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
         run: |
-          python3 scripts/standalone.py --zed zed --root "$ROOT" --version "$VERSION" \
+          python3 scripts/standalone.py --zed zed --root "$ROOT" --version "$VERSION" --verify \
             ${{ inputs.dry_run && '--dry-run' || '' }}
