@@ -3,7 +3,6 @@ import argparse, json, os, subprocess, shutil, time, urllib.request
 from pathlib import Path
 import tomlkit
 
-SUFFIX = "-standalone"
 ZED_REPO = "https://github.com/zed-industries/zed"
 
 def metadata(zed):
@@ -28,8 +27,8 @@ def closure(pkgs, root):
     visit(root)
     return order
 
-def renamed(name, root):
-    return f"{root}{SUFFIX}" if name == root else f"{name}-{root}{SUFFIX}"
+def renamed(name, root, ns):
+    return ns if name == root else f"{name}-{ns}"
 
 def index_versions(name):
     n = name.lower()
@@ -125,9 +124,11 @@ def rewrite(pkg, internal, rename, version, local, dest):
     doc = build_manifest(pkg, internal, rename, version, local)
     (dest / "Cargo.toml").write_text(tomlkit.dumps(doc))
 
-def publish(dest, dry):
-    cmd = ["cargo", "publish", "--no-verify", "--allow-dirty",
+def publish(dest, dry, verify=False):
+    cmd = ["cargo", "publish", "--allow-dirty",
            "--manifest-path", str(dest / "Cargo.toml")]
+    if not verify:
+        cmd.append("--no-verify")
     if dry:
         cmd.append("--dry-run")
         if subprocess.run(cmd).returncode != 0:
@@ -144,6 +145,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--zed", required=True)
     ap.add_argument("--root", default="gpui")
+    ap.add_argument("--namespace")
     ap.add_argument("--version")
     ap.add_argument("--crate")
     ap.add_argument("--local", action="store_true")
@@ -152,12 +154,14 @@ def main():
     ap.add_argument("--manifest", action="store_true")
     ap.add_argument("--out")
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--verify", action="store_true")
     args = ap.parse_args()
 
     zed = Path(args.zed).resolve()
     pkgs = metadata(zed)
     order = closure(pkgs, args.root)
-    rename = {n: renamed(n, args.root) for n in order}
+    ns = args.namespace or f"{args.root}-standalone"
+    rename = {n: renamed(n, args.root, ns) for n in order}
     internal = {n: pkgs[n] for n in order}
 
     if args.list:
@@ -191,7 +195,9 @@ def main():
             print(f"skip {rename[n]}@{version}")
             continue
         print(f"publish {rename[n]}@{version}")
-        publish(dest, args.dry_run)
+        publish(dest, args.dry_run, args.verify)
+        if not args.dry_run:
+            time.sleep(15)
 
 
 if __name__ == "__main__":

@@ -10,40 +10,25 @@ env:
   ROOT: gpui
 
 jobs:
-  resolve:
+  verify-publish:
     runs-on: ubuntu-latest
-    outputs:
-      tag: ${{ steps.r.outputs.tag }}
-      version: ${{ steps.r.outputs.version }}
+    environment: crates-io
     steps:
-      - id: r
+      - uses: actions/checkout@v6
+      - id: pick
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG="${{ inputs.tag }}"
           [ -z "$TAG" ] && TAG=$(gh release view --repo zed-industries/zed --json tagName -q .tagName)
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
-
-  build:
-    needs: resolve
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
-    env:
-      VERSION: ${{ needs.resolve.outputs.version }}
-    steps:
-      - uses: actions/checkout@v6
       - uses: actions/checkout@v6
         with:
           repository: zed-industries/zed
-          ref: ${{ needs.resolve.outputs.tag }}
+          ref: ${{ steps.pick.outputs.tag }}
           path: zed
       - uses: dtolnay/rust-toolchain@stable
-      - if: runner.os == 'Linux'
-        run: |
+      - run: |
           sudo apt-get update
           sudo apt-get install -y libwayland-dev libxkbcommon-x11-dev \
             libxcb-shape0-dev libxcb-xfixes0-dev libvulkan-dev \
@@ -52,15 +37,12 @@ jobs:
         with:
           python-version: "3.13"
       - run: pip install tomlkit
-      - shell: bash
+
+      - name: Publish under throwaway namespace
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
         run: |
+          NS="zztmp$(openssl rand -hex 4)"
+          echo "namespace: $NS"
           python3 scripts/standalone.py --zed zed --root "$ROOT" \
-            --version "$VERSION" --local --out build
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: build/${{ env.ROOT }}-standalone
-      - if: runner.os == 'Linux'
-        run: cargo build --manifest-path "build/${ROOT}-standalone/Cargo.toml" --no-default-features --features wayland,x11
-      - if: runner.os != 'Linux'
-        shell: bash
-        run: cargo build --manifest-path "build/${ROOT}-standalone/Cargo.toml"
+            --namespace "$NS" --version 0.0.0 --verify
