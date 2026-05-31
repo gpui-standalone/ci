@@ -108,4 +108,5 @@ jobs:
           cp "../build/${{ matrix.dir }}/Cargo.toml" Cargo.toml
           git add -A
           git commit -qm "chore(release): $VERSION ($TAG)"
-          git push mirror upstream:upstream main:main
+          git push mirror main:main upstream:upstream
+          gh repo edit "$REPO" --default-branch main
