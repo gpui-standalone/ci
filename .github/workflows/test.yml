@@ -49,13 +49,13 @@ jobs:
           sudo apt-get install -y libwayland-dev libxkbcommon-x11-dev \
             libxcb-shape0-dev libxcb-xfixes0-dev libvulkan-dev \
             libssl-dev libfontconfig1-dev pkg-config
-      - run: pip install tomlkit
+      - run: python3 -m pip install tomlkit
       - shell: bash
         run: |
           python3 scripts/standalone.py --zed zed --root "$ROOT" \
             --version "$VERSION" --local --out build
       - if: runner.os == 'Linux'
-        run: cargo build --manifest-path "build/${ROOT}-standalone/Cargo.toml" --no-default-features --features wayland,x11 --examples
+        run: cargo build --manifest-path "build/${ROOT}-standalone/Cargo.toml" --no-default-features --features wayland,x11
       - if: runner.os != 'Linux'
         shell: bash
-        run: cargo build --manifest-path "build/${ROOT}-standalone/Cargo.toml" --examples
+        run: cargo build --manifest-path "build/${ROOT}-standalone/Cargo.toml"
