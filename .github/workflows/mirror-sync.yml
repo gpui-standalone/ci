@@ -1,0 +1,85 @@
+name: mirror-sync
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  ORG: gpui-standalone
+  ROOT: gpui
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.r.outputs.tag }}
+      version: ${{ steps.r.outputs.version }}
+      matrix: ${{ steps.r.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v6
+      - id: pick
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ inputs.tag }}"
+          [ -z "$TAG" ] && TAG=$(gh release view --repo zed-industries/zed --json tagName -q .tagName)
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v6
+        with:
+          repository: zed-industries/zed
+          ref: ${{ steps.pick.outputs.tag }}
+          path: zed
+      - uses: dtolnay/rust-toolchain@stable
+      - run: pip install tomlkit
+      - id: r
+        run: |
+          TAG="${{ steps.pick.outputs.tag }}"
+          M=$(python3 scripts/standalone.py --zed zed --root "$ROOT" --list)
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+          echo "matrix={\"include\":$M}" >> "$GITHUB_OUTPUT"
+
+  push:
+    needs: resolve
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.resolve.outputs.matrix) }}
+    env:
+      TAG: ${{ needs.resolve.outputs.tag }}
+      VERSION: ${{ needs.resolve.outputs.version }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6
+        with:
+          repository: zed-industries/zed
+          ref: ${{ env.TAG }}
+          path: zed
+      - uses: dtolnay/rust-toolchain@stable
+      - run: pip install tomlkit
+
+      - name: Build crate tree
+        run: |
+          python3 scripts/standalone.py --zed zed --root "$ROOT" \
+            --version "$VERSION" --local --out build
+
+      - name: Push crate to its repo
+        env:
+          GH_TOKEN: ${{ secrets.ORG_PAT }}
+        run: |
+          REPO="$ORG/${{ matrix.repo }}"
+          gh repo view "$REPO" >/dev/null 2>&1 \
+            || gh repo create "$REPO" --public \
+                 --description "Standalone mirror of zed-industries/zed:${{ matrix.path }}"
+          cd "build/${{ matrix.repo }}"
+          git init -q
+          git checkout -qb main
+          git -c user.email=ci@local -c user.name=ci add -A
+          git -c user.email=ci@local -c user.name=ci commit -qm "$TAG ($VERSION)"
+          git push --force \
+            "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" main
