@@ -63,29 +63,48 @@ jobs:
           repository: zed-industries/zed
           ref: ${{ env.TAG }}
           path: zed
+          fetch-depth: 0
       - uses: dtolnay/rust-toolchain@stable
       - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
       - run: pip install tomlkit
 
-      - name: Build crate tree
+      - name: Generate manifest
         run: |
           python3 scripts/standalone.py --zed zed --root "$ROOT" \
-            --version "$VERSION" --local --out build
+            --version "$VERSION" --emit --out build
 
-      - name: Push crate to its repo
+      - name: Sync upstream + main
         env:
           GH_TOKEN: ${{ secrets.ORG_PAT }}
         run: |
+          set -e
           REPO="$ORG/${{ matrix.repo }}"
+          URL="https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git"
           gh repo view "$REPO" >/dev/null 2>&1 \
             || gh repo create "$REPO" --public \
                  --description "Standalone mirror of zed-industries/zed:${{ matrix.path }}"
-          cd "build/${{ matrix.dir }}"
-          git init -q
-          git checkout -qb main
-          git -c user.email=ci@local -c user.name=ci add -A
-          git -c user.email=ci@local -c user.name=ci commit -qm "$TAG ($VERSION)"
-          git push --force \
-            "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" main
+          git config --global user.email ci@local
+          git config --global user.name ci
+          cd zed
+          git remote add mirror "$URL"
+          git fetch -q mirror 'refs/heads/upstream:refs/remotes/mirror/upstream' || true
+          git fetch -q mirror 'refs/heads/main:refs/remotes/mirror/main' || true
+          PREV=$(git rev-parse -q --verify refs/remotes/mirror/upstream || true)
+          if [ -n "$PREV" ]; then
+            NEW=$(git subtree split --prefix="${{ matrix.path }}" --onto="$PREV" -q)
+          else
+            NEW=$(git subtree split --prefix="${{ matrix.path }}" -q)
+          fi
+          git branch -f upstream "$NEW"
+          if git rev-parse -q --verify refs/remotes/mirror/main >/dev/null; then
+            git checkout -q -B main refs/remotes/mirror/main
+            git merge --no-edit -m "chore: merge upstream $TAG" "$NEW" || true
+          else
+            git checkout -q -B main "$NEW"
+          fi
+          cp "../build/${{ matrix.dir }}/Cargo.toml" Cargo.toml
+          git add -A
+          git commit -qm "chore(release): $VERSION ($TAG)"
+          git push mirror upstream:upstream main:main

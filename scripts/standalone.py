@@ -147,6 +147,7 @@ def main():
     ap.add_argument("--version")
     ap.add_argument("--crate")
     ap.add_argument("--local", action="store_true")
+    ap.add_argument("--emit", action="store_true")
     ap.add_argument("--list", action="store_true")
     ap.add_argument("--manifest", action="store_true")
     ap.add_argument("--out")
@@ -173,10 +174,17 @@ def main():
         return
 
     out = Path(args.out).resolve() if args.out else zed.parent / "_standalone"
+
+    if not (args.local or args.emit):
+        for n in order:
+            action = "skip (exists)" if version in index_versions(rename[n]) else "publish"
+            print(f"  {action}: {rename[n]}@{version}")
+        print(f"plan: {len(order)} crates @ {version}" + (" (dry-run)" if args.dry_run else ""))
+
     for n in order:
         dest = out / rename[n]
         rewrite(pkgs[n], internal, rename, version, args.local, dest)
-        if args.local:
+        if args.local or args.emit:
             print(f"{rename[n]} -> {dest}")
             continue
         if version in index_versions(rename[n]):
