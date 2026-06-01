@@ -9,7 +9,7 @@ STRIP = {"ztracing", "ztracing_macro", "zlog"}
 def metadata(zed):
     out = subprocess.run(
         ["cargo", "metadata", "--format-version", "1", "--no-deps"],
-        cwd=zed, capture_output=True, text=True, check=True,
+        cwd=zed, capture_output=True, text=True, encoding="utf-8", check=True,
     ).stdout
     return {p["name"]: p for p in json.loads(out)["packages"]}
 
@@ -35,7 +35,7 @@ def index_versions(name):
     n = name.lower()
     d = {1: f"1/{n}", 2: f"2/{n}", 3: f"3/{n[0]}/{n}"}.get(len(n), f"{n[:2]}/{n[2:4]}/{n}")
     try:
-        body = urllib.request.urlopen(f"https://index.crates.io/{d}", timeout=15).read().decode()
+        body = urllib.request.urlopen(f"https://index.crates.io/{d}", timeout=15).read().decode("utf-8")
     except Exception:
         return []
     return [json.loads(l)["vers"] for l in body.splitlines() if l.strip()]
@@ -70,7 +70,7 @@ def dep_spec(d, internal, rename, version, local):
     return t
 
 def build_manifest(pkg, internal, rename, version, local):
-    doc = tomlkit.parse(Path(pkg["manifest_path"]).read_text())
+    doc = tomlkit.parse(Path(pkg["manifest_path"]).read_text(encoding="utf-8"))
     name = pkg["name"]
 
     p = doc["package"]
@@ -130,15 +130,15 @@ def clean_source(dest):
         r"|^\s*#\[instrument\b.*\]\s*$"
     )
     for f in dest.rglob("*.rs"):
-        lines = f.read_text().splitlines(keepends=True)
+        lines = f.read_text(encoding="utf-8").splitlines(keepends=True)
         kept = [l for l in lines if not pat.match(l)]
         if len(kept) != len(lines):
-            f.write_text("".join(kept))
+            f.write_text("".join(kept), encoding="utf-8")
 
 def rewrite(pkg, internal, rename, version, local, dest):
     shutil.copytree(Path(pkg["manifest_path"]).parent, dest, dirs_exist_ok=True)
     doc = build_manifest(pkg, internal, rename, version, local)
-    (dest / "Cargo.toml").write_text(tomlkit.dumps(doc))
+    (dest / "Cargo.toml").write_text(tomlkit.dumps(doc), encoding="utf-8")
     clean_source(dest)
 
 def publish(dest, dry, verify=False):
@@ -153,7 +153,7 @@ def publish(dest, dry, verify=False):
                   f"(expected for crates with not-yet-published internal deps)")
         return
     for _ in range(4):
-        r = subprocess.run(cmd, stderr=subprocess.PIPE, text=True)
+        r = subprocess.run(cmd, stderr=subprocess.PIPE, text=True, encoding="utf-8")
         if r.stderr:
             print(r.stderr, end="")
         if r.returncode == 0:
