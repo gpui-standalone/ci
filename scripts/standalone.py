@@ -4,6 +4,7 @@ from pathlib import Path
 import tomlkit
 
 ZED_REPO = "https://github.com/zed-industries/zed"
+STRIP = {"ztracing", "ztracing_macro", "zlog"}
 
 def metadata(zed):
     out = subprocess.run(
@@ -16,11 +17,11 @@ def closure(pkgs, root):
     order, seen = [], set()
 
     def visit(name):
-        if name in seen or name not in pkgs:
+        if name in seen or name not in pkgs or name in STRIP:
             return
         seen.add(name)
         for d in pkgs[name]["dependencies"]:
-            if d["kind"] != "dev" and d.get("path") and d["name"] in pkgs:
+            if d["kind"] != "dev" and d.get("path") and d["name"] in pkgs and d["name"] not in STRIP:
                 visit(d["name"])
         order.append(name)
 
@@ -95,6 +96,9 @@ def build_manifest(pkg, internal, rename, version, local):
     for d in pkg["dependencies"]:
         if d["kind"] == "dev":
             continue
+        if d["name"] in STRIP:
+            dropped.append(d["name"])
+            continue
         spec = dep_spec(d, internal, rename, version, local)
         key = d.get("rename") or d["name"]
         if spec is None:
@@ -119,10 +123,23 @@ def build_manifest(pkg, internal, rename, version, local):
 
     return doc
 
+def clean_source(dest):
+    import re
+    pat = re.compile(
+        r"^\s*use\s+(?:" + "|".join(STRIP) + r")::.*;\s*$"
+        r"|^\s*#\[instrument\b.*\]\s*$"
+    )
+    for f in dest.rglob("*.rs"):
+        lines = f.read_text().splitlines(keepends=True)
+        kept = [l for l in lines if not pat.match(l)]
+        if len(kept) != len(lines):
+            f.write_text("".join(kept))
+
 def rewrite(pkg, internal, rename, version, local, dest):
     shutil.copytree(Path(pkg["manifest_path"]).parent, dest, dirs_exist_ok=True)
     doc = build_manifest(pkg, internal, rename, version, local)
     (dest / "Cargo.toml").write_text(tomlkit.dumps(doc))
+    clean_source(dest)
 
 def publish(dest, dry, verify=False):
     cmd = ["cargo", "publish", "--allow-dirty",
